@@ -1,4 +1,5 @@
 using Azure;
+using Dapper;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -35,45 +36,37 @@ app.MapGet("/GetCustomerInfo/{id}", (
     var dataTable = new DataTable();
     try
     {
-
         using (var connection = new SqlConnection(conString))
         {
+            string queryString = @"
+            SELECT Item, Price, TypeOfPayment, Date 
+            FROM Customer 
+            WHERE id = @id";
+
             if (startDate.HasValue && endDate.HasValue)
             {
-                var queryString = @"
-                SELECT Item, Price, TypeOfPayment, Date FROM Customer
-                WHERE id = @id
-                AND CreatedTime BETWEEN @startDate AND @endDate";
-
-                using SqlCommand command = new(queryString, connection);
-                command.Parameters.Add("@id", SqlDbType.Char, 10).Value = id;
-                command.Parameters.Add("@startDate", SqlDbType.Date).Value = startDate;
-                command.Parameters.Add("@endDate", SqlDbType.Date).Value = endDate;
-
-                connection.Open();
-                using var dataAdapter = new SqlDataAdapter(command);
-                dataAdapter.Fill(dataTable);
+                queryString += " AND CreatedTime BETWEEN @startDate AND @endDate";
             }
 
-            else
-            {
-                var queryString = @"SELECT Item, Price, TypeOfPayment, Date FROM Customer
-                                    WHERE id = @id";
-                SqlCommand command = new(queryString, connection);
-                command.Parameters.Add("@id", SqlDbType.Char, 10).Value = id;
+            var result = connection.Query(
+                queryString,
+                new
+                {
+                    id,
+                    startDate,
+                    endDate
+                }
+            );
 
-                connection.Open();
-                using var dataAdapter = new SqlDataAdapter(command);
-                dataAdapter.Fill(dataTable);
-                
-            }
+            return JsonConvert.SerializeObject(result);
         }
     }
     catch (Exception ex)
     {
         Console.WriteLine($"Error: {ex.Message}");
+        return null;
     }
-    return JsonConvert.SerializeObject(dataTable);
+
 });
 app.MapGet("/MockGetCustomerInfo/{id}", (
     ICustomerRepository repo,
